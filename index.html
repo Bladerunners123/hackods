@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bladerunners | Dashboard HackODS UNAM 2026</title>
+  <meta name="description" content="Dashboard del proyecto Bladerunners para HackODS UNAM 2026." />
+  <meta http-equiv="refresh" content="0; url=./dashboard/dashboard.html" />
+  <style>
+    :root{
+      --bl-black:#1e1e1e;
+      --bl-primary:#083d53;
+      --bl-secondary:#11516b;
+      --bl-accent:#266985;
+      --bl-bg:#e3e6e6;
+      --bl-surface:#ffffff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      background:linear-gradient(180deg,var(--bl-bg) 0%, #eef1f2 100%);
+      color:var(--bl-black);
+      font-family:Segoe UI, Arial, sans-serif;
+    }
+    .wrap{
+      width:min(720px,92vw);
+      background:var(--bl-surface);
+      border-radius:24px;
+      box-shadow:0 16px 40px rgba(8,61,83,.14);
+      overflow:hidden;
+      border:1px solid rgba(8,61,83,.12);
+    }
+    .top{
+      padding:28px 32px;
+      background:linear-gradient(135deg,var(--bl-primary) 0%, var(--bl-secondary) 60%, var(--bl-accent) 100%);
+      color:#fff;
+    }
+    .top h1{
+      margin:0 0 8px 0;
+      font-size:2rem;
+      line-height:1.1;
+    }
+    .top p{
+      margin:0;
+      opacity:.95;
+      font-size:1rem;
+    }
+    .body{
+      padding:28px 32px 32px;
+    }
+    .status{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 14px;
+      border-radius:999px;
+      background:rgba(38,105,133,.08);
+      color:var(--bl-primary);
+      font-weight:700;
+      margin-bottom:18px;
+    }
+    .dot{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+      background:var(--bl-accent);
+      box-shadow:0 0 0 6px rgba(38,105,133,.12);
+      animation:pulse 1.4s infinite;
+    }
+    @keyframes pulse{
+      0%{transform:scale(1);opacity:1}
+      70%{transform:scale(1.15);opacity:.7}
+      100%{transform:scale(1);opacity:1}
+    }
+    p{
+      line-height:1.65;
+      margin:0 0 18px 0;
+    }
+    a.btn{
+      display:inline-block;
+      padding:12px 18px;
+      border-radius:12px;
+      background:var(--bl-primary);
+      color:#fff;
+      text-decoration:none;
+      font-weight:700;
+      box-shadow:0 8px 18px rgba(8,61,83,.16);
+    }
+    a.btn:hover{
+      background:var(--bl-secondary);
+    }
+    .small{
+      margin-top:14px;
+      color:#5b6770;
+      font-size:.95rem;
+    }
+  </style>
+  <script>
+    window.location.replace("./dashboard/dashboard.html");
+  </script>
+</head>
+<body>
+  <main class="wrap">
+    <section class="top">
+      <h1>Bladerunners</h1>
+      <p>HackODS UNAM 2026 · Dashboard de deserción escolar en México</p>
+    </section>
+    <section class="body">
+      <div class="status">
+        <span class="dot"></span>
+        Cargando dashboard…
+      </div>
+      <p>
+        Serás redirigido automáticamente al tablero principal del proyecto.
+      </p>
+      <a class="btn" href="./dashboard/dashboard.html">Abrir dashboard</a>
+      <div class="small">
+        Sube también la carpeta <strong>dashboard</strong> completa, incluyendo
+        <strong>dashboard.html</strong> y <strong>dashboard_files</strong>.
+      </div>
+    </section>
+  </main>
+</body>
+</html>

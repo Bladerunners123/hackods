@@ -1,0 +1,355 @@
+/*-- scss:defaults --*/
+$body-bg: #e3e6e6;
+$body-color: #1e1e1e;
+
+$primary: #083d53;
+$secondary: #11516b;
+$success: #266985;
+$info: #266985;
+
+$light: #ffffff;
+$dark: #1e1e1e;
+
+$border-radius: 1rem;
+$card-border-radius: 1rem;
+$box-shadow: 0 10px 24px rgba(8, 61, 83, 0.10);
+
+/*-- scss:rules --*/
+
+:root {
+  --bl-black: #1e1e1e;
+  --bl-primary: #083d53;
+  --bl-secondary: #11516b;
+  --bl-accent: #266985;
+  --bl-bg: #e3e6e6;
+  --bl-surface: #ffffff;
+
+  --bl-text: #1e1e1e;
+  --bl-text-soft: #4c5a63;
+  --bl-text-inverse: #ffffff;
+
+  --bl-border: rgba(8, 61, 83, 0.14);
+  --bl-shadow: 0 10px 24px rgba(8, 61, 83, 0.10);
+  --bl-shadow-strong: 0 14px 32px rgba(8, 61, 83, 0.16);
+}
+
+/* ===== Base ===== */
+
+html,
+body {
+  background: linear-gradient(180deg, #e3e6e6 0%, #edf0f0 100%);
+  color: var(--bl-text);
+}
+
+body {
+  font-feature-settings: "liga" 1, "calt" 1;
+}
+
+main,
+.quarto-dashboard-content {
+  color: var(--bl-text);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--bl-primary);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+p,
+li,
+span,
+div {
+  color: inherit;
+}
+
+a {
+  color: var(--bl-primary);
+  text-decoration: none;
+}
+
+a:hover,
+a:focus {
+  color: var(--bl-accent);
+  text-decoration: underline;
+}
+
+/* ===== Header / navbar ===== */
+
+.navbar,
+.quarto-dashboard-header,
+#quarto-header {
+  background: linear-gradient(135deg, #083d53 0%, #11516b 55%, #266985 100%) !important;
+  border-bottom: 0 !important;
+  box-shadow: 0 8px 20px rgba(8, 61, 83, 0.22);
+}
+
+.navbar-title,
+.navbar-brand,
+.navbar-nav .nav-link,
+.quarto-dashboard-header .navbar-brand,
+.quarto-dashboard-header .nav-link,
+#quarto-header .nav-link,
+#quarto-header .navbar-brand {
+  color: #ffffff !important;
+}
+
+.navbar-nav .nav-link:hover,
+.quarto-dashboard-header .nav-link:hover,
+#quarto-header .nav-link:hover {
+  color: #e3e6e6 !important;
+  opacity: 0.95;
+}
+
+.nav-link.active,
+.navbar-nav .nav-link.active {
+  color: #ffffff !important;
+  font-weight: 700;
+  border-bottom: 2px solid #ffffff;
+}
+
+/* ===== Sidebar ===== */
+
+.quarto-dashboard .sidebar,
+.sidebar {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid var(--bl-border);
+  box-shadow: inset -1px 0 0 rgba(8, 61, 83, 0.04);
+}
+
+.sidebar .nav-link {
+  color: var(--bl-primary);
+  border-radius: 12px;
+}
+
+.sidebar .nav-link:hover {
+  background: rgba(38, 105, 133, 0.10);
+  color: var(--bl-primary);
+}
+
+.sidebar .nav-link.active {
+  background: var(--bl-primary);
+  color: #ffffff !important;
+}
+
+/* ===== Cards ===== */
+
+.quarto-dashboard .card,
+.card,
+.value-box,
+.table,
+.datatables,
+.dataTables_wrapper {
+  background: var(--bl-surface);
+  border: 1px solid var(--bl-border);
+  border-radius: 18px;
+  box-shadow: var(--bl-shadow);
+}
+
+.quarto-dashboard .card {
+  overflow: hidden;
+}
+
+.quarto-dashboard .card-header,
+.card-header {
+  background: linear-gradient(90deg, #083d53 0%, #11516b 100%);
+  color: #ffffff !important;
+  border-bottom: 0;
+  font-weight: 700;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.quarto-dashboard .card-header *,
+.card-header * {
+  color: #ffffff !important;
+}
+
+.card-body {
+  color: var(--bl-text);
+}
+
+/* ===== Value boxes ===== */
+
+.value-box {
+  position: relative;
+  overflow: hidden;
+  border: 0 !important;
+  background: #ffffff !important;
+}
+
+.value-box::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  border-radius: 18px 0 0 18px;
+  background: linear-gradient(180deg, #083d53 0%, #266985 100%);
+}
+
+.value-box .value {
+  color: var(--bl-black) !important;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.value-box .caption,
+.value-box .title {
+  color: var(--bl-text-soft) !important;
+  font-weight: 600;
+}
+
+/* ===== Narrative blocks ===== */
+
+.narrativa {
+  background: #ffffff;
+  border-left: 6px solid #083d53;
+  border-radius: 18px;
+  padding: 1rem 1.15rem;
+  box-shadow: var(--bl-shadow);
+  line-height: 1.7;
+  color: var(--bl-text);
+}
+
+.narrativa strong {
+  color: var(--bl-primary);
+}
+
+.narrativa-secundaria {
+  border-left-color: #266985;
+}
+
+/* ===== Tables ===== */
+
+.table,
+table {
+  color: var(--bl-text);
+  background: #ffffff;
+}
+
+.table thead th,
+table thead th {
+  background: #083d53 !important;
+  color: #ffffff !important;
+  border-color: #083d53 !important;
+  font-weight: 700;
+}
+
+.table tbody tr:nth-child(even),
+table tbody tr:nth-child(even) {
+  background: rgba(227, 230, 230, 0.55);
+}
+
+.table tbody tr:hover,
+table tbody tr:hover {
+  background: rgba(38, 105, 133, 0.10);
+}
+
+/* ===== DataTables ===== */
+
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select,
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border-radius: 10px !important;
+  border: 1px solid rgba(8, 61, 83, 0.18) !important;
+}
+
+.dataTables_wrapper .dataTables_filter input:focus,
+.dataTables_wrapper .dataTables_length select:focus {
+  outline: none;
+  border-color: #266985 !important;
+  box-shadow: 0 0 0 0.18rem rgba(38, 105, 133, 0.18) !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+  background: #083d53 !important;
+  color: #ffffff !important;
+  border-color: #083d53 !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #266985 !important;
+  color: #ffffff !important;
+  border-color: #266985 !important;
+}
+
+/* ===== Plotly ===== */
+
+.plotly,
+.js-plotly-plot,
+.plot-container {
+  border-radius: 14px;
+}
+
+.js-plotly-plot .plotly .modebar {
+  background: rgba(255, 255, 255, 0.85) !important;
+  border-radius: 10px;
+}
+
+/* ===== Blockquote / code ===== */
+
+blockquote {
+  background: rgba(255, 255, 255, 0.75);
+  border-left: 4px solid #266985;
+  padding: 0.9rem 1rem;
+  border-radius: 0.75rem;
+  color: #344049;
+}
+
+code {
+  color: #083d53;
+  background: rgba(8, 61, 83, 0.07);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.35rem;
+}
+
+pre code {
+  display: block;
+  background: #1e1e1e;
+  color: #ffffff;
+  padding: 1rem;
+  border-radius: 1rem;
+}
+
+/* ===== Buttons ===== */
+
+.btn-primary {
+  background: #083d53;
+  border-color: #083d53;
+  color: #ffffff;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background: #11516b;
+  border-color: #11516b;
+  color: #ffffff;
+}
+
+.btn-secondary {
+  background: #266985;
+  border-color: #266985;
+  color: #ffffff;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+  background: #11516b;
+  border-color: #11516b;
+  color: #ffffff;
+}
+
+/* ===== Utility polish ===== */
+
+hr {
+  border-color: rgba(8, 61, 83, 0.12);
+}
+
+.quarto-dashboard .card:hover,
+.card:hover {
+  box-shadow: var(--bl-shadow-strong);
+  transform: translateY(-1px);
+  transition: all 0.18s ease;
+}

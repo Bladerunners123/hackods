@@ -1,0 +1,730 @@
+---
+title: "Deserción escolar en México"
+subtitle: "Pobreza, conectividad y género como predictores del abandono en media superior"
+author: "Equipo Bladerunners"
+date: "HackODS UNAM 2026"
+jupyter: python3
+format:
+  dashboard:
+    theme: [flatly, custom.scss]
+    orientation: columns
+    scrolling: true
+    nav-buttons:
+      - icon: github
+        href: https://github.com/Bladerunners123/
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{python}
+#| label: setup
+from pathlib import Path
+import warnings
+
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import statsmodels.api as sm
+from IPython.display import HTML, Markdown, display
+
+warnings.filterwarnings("ignore")
+pd.set_option("display.max_columns", 50)
+
+BASE_DIR = Path("..")
+DATA_DIR = BASE_DIR / "datos" / "processed"
+CUSTOM_SCSS = Path("custom.scss")
+
+required_files = [
+    DATA_DIR / "datos_estados.csv",
+    DATA_DIR / "serie_temporal.csv",
+]
+missing_files = [str(p) for p in required_files if not p.exists()]
+if missing_files:
+    raise FileNotFoundError(
+        "Faltan archivos del pipeline: "
+        + ", ".join(missing_files)
+        + ". Ejecuta primero 01_pipeline_bladerunners_python.ipynb."
+    )
+
+# Paleta basada en la seleccionada para el dashboard
+PAL_BG = "#e3e6e6"
+PAL_TEXT = "#1e1e1e"
+PAL_PRIMARY = "#083d53"
+PAL_SECOND = "#11516b"
+PAL_ACCENT = "#266985"
+PAL_WHITE = "#ffffff"
+PAL_SOFT = "#d4dde0"
+PAL_SUCCESS = "#1b6b5f"
+
+
+def fmt_pct(x, digits=1):
+    return f"{x:.{digits}f} %"
+
+
+def fmt_pp(x, digits=1):
+    return f"{x:.{digits}f} pp"
+
+
+def metric_card(title, value, tone="primary"):
+    colors = {
+        "primary": PAL_PRIMARY,
+        "second": PAL_SECOND,
+        "accent": PAL_ACCENT,
+        "dark": PAL_TEXT,
+    }
+    color = colors.get(tone, PAL_PRIMARY)
+    html = f"""
+    <div style="background:{PAL_WHITE}; border-left:10px solid {color}; border-radius:18px;
+                padding:18px 20px; box-shadow:0 6px 18px rgba(8,61,83,.12); min-height:118px;">
+      <div style="font-size:0.92rem; color:#4a5560; margin-bottom:6px;">{title}</div>
+      <div style="font-size:2rem; font-weight:700; color:{PAL_TEXT}; line-height:1.1;">{value}</div>
+    </div>
+    """
+    display(HTML(html))
+
+
+# -------------------------
+# Lectura y homologacion
+# -------------------------
+estados = pd.read_csv(DATA_DIR / "datos_estados.csv")
+serie = pd.read_csv(DATA_DIR / "serie_temporal.csv")
+
+rename_map = {
+    "cve_ent": "cve",
+    "abandono_hombres": "abandono_h",
+    "abandono_mujeres": "abandono_m",
+    "pobreza_pct": "pobreza",
+    "pobreza_ext_pct": "pob_ext",
+    "rezago_edu_pct": "rezago_edu",
+    "internet_hogares_pct": "internet",
+    "indice_vulnerabilidad": "ive",
+}
+estados = estados.rename(columns={k: v for k, v in rename_map.items() if k in estados.columns})
+
+required_cols = [
+    "estado", "abandono_total", "abandono_h", "abandono_m",
+    "pobreza", "pob_ext", "rezago_edu", "internet"
+]
+missing_cols = [c for c in required_cols if c not in estados.columns]
+if missing_cols:
+    raise ValueError(f"Faltan columnas en datos_estados.csv: {missing_cols}")
+
+if "brecha_genero" not in estados.columns:
+    estados["brecha_genero"] = estados["abandono_h"] - estados["abandono_m"]
+if "ive" not in estados.columns:
+    estados["ive"] = (estados["pobreza"] + (100 - estados["internet"])) / 2
+if "zona_critica" not in estados.columns:
+    estados["zona_critica"] = (
+        (estados["pobreza"] > estados["pobreza"].quantile(0.75))
+        & (estados["internet"] < estados["internet"].quantile(0.25))
+        & (estados["abandono_total"] > estados["abandono_total"].quantile(0.50))
+    )
+
+north = {"Baja California", "Baja California Sur", "Chihuahua", "Coahuila", "Durango", "Nuevo León",
+         "San Luis Potosí", "Sinaloa", "Sonora", "Tamaulipas", "Zacatecas"}
+center = {"Aguascalientes", "Ciudad de México", "Estado de México", "Guanajuato", "Hidalgo", "Morelos",
+          "Puebla", "Querétaro", "Tlaxcala"}
+west = {"Colima", "Jalisco", "Michoacán", "Nayarit"}
+southeast = {"Chiapas", "Campeche", "Quintana Roo", "Tabasco", "Veracruz", "Yucatán"}
+south = {"Guerrero", "Oaxaca"}
+
+
+def region_of(estado):
+    if estado in north:
+        return "Norte"
+    if estado in center:
+        return "Centro"
+    if estado in west:
+        return "Occidente"
+    if estado in southeast:
+        return "Sureste"
+    if estado in south:
+        return "Sur"
+    return "Otra"
+
+
+estados["region"] = estados["estado"].map(region_of)
+estados["categoria_pob"] = np.select(
+    [estados["pobreza"] >= 50, estados["pobreza"] >= 30],
+    ["Alta (≥50%)", "Media (30-50%)"],
+    default="Baja (<30%)",
+)
+estados["sin_internet"] = 100 - estados["internet"]
+
+# -------------------------
+# Modelo y metricas
+# -------------------------
+X = estados[["pobreza", "internet", "rezago_edu"]].copy()
+X = sm.add_constant(X)
+y = estados["abandono_total"]
+modelo = sm.OLS(y, X).fit()
+
+coefs_modelo = modelo.conf_int()
+coefs_modelo.columns = ["conf_low", "conf_high"]
+coefs_modelo = coefs_modelo.join(modelo.params.rename("estimate")).join(modelo.pvalues.rename("p_value"))
+coefs_modelo = coefs_modelo.reset_index().rename(columns={"index": "term"})
+coefs_modelo = coefs_modelo[coefs_modelo["term"] != "const"].copy()
+coefs_modelo["variable"] = coefs_modelo["term"].map({
+    "pobreza": "Pobreza multidimensional",
+    "internet": "Acceso a internet",
+    "rezago_edu": "Rezago educativo",
+})
+coefs_modelo["efecto"] = np.where(coefs_modelo["estimate"] >= 0, "Aumenta abandono", "Reduce abandono")
+
+corr_pob_ab = estados["pobreza"].corr(estados["abandono_total"])
+corr_int_ab = estados["internet"].corr(estados["abandono_total"])
+corr_pob_int = estados["pobreza"].corr(estados["internet"])
+r2_modelo = modelo.rsquared
+
+abandono_nacional = float(serie.loc[serie["anio"] == serie["anio"].max(), "abandono_ms"].iloc[0])
+brecha_nacional = float(estados["brecha_genero"].mean())
+total_criticos = int(estados["zona_critica"].sum())
+
+top_abandono = estados.nlargest(1, "abandono_total").iloc[0]
+top_ive = estados.nlargest(1, "ive").iloc[0]
+min_internet = estados.nsmallest(1, "internet").iloc[0]
+max_brecha = estados.nlargest(1, "brecha_genero").iloc[0]
+
+estados_criticos = estados.loc[estados["zona_critica"], "estado"].tolist()
+texto_criticos = ", ".join(estados_criticos) if estados_criticos else "Ninguno"
+
+# Tema plotly
+PLOTLY_LAYOUT = dict(
+    template="plotly_white",
+    paper_bgcolor=PAL_WHITE,
+    plot_bgcolor=PAL_WHITE,
+    font=dict(color=PAL_TEXT, family="Inter, Segoe UI, Arial"),
+    margin=dict(l=30, r=20, t=50, b=30),
+)
+```
+
+# Panorama
+
+## Row {height="16%"}
+
+### 
+
+```{python}
+metric_card("Abandono nacional 2022-2023", fmt_pct(abandono_nacional), "primary")
+```
+
+### 
+
+```{python}
+metric_card("Correlación pobreza ↔ abandono", f"{corr_pob_ab:.2f}", "second")
+```
+
+### 
+
+```{python}
+metric_card("Correlación internet ↔ abandono", f"{corr_int_ab:.2f}", "accent")
+```
+
+### 
+
+```{python}
+metric_card("Estados en zona crítica", str(total_criticos), "dark")
+```
+
+## Row {height="20%"}
+
+### Hallazgo central
+
+```{python}
+display(Markdown(f"""
+<div class="narrativa">
+Los datos analizados apunta a un patrón estructural: el abandono escolar en media superior crece cuando se acumulan <strong>pobreza</strong>, <strong>rezago educativo</strong> y <strong>menor conectividad</strong>. El dato nacional más reciente del los datos ubica el abandono en <strong>{fmt_pct(abandono_nacional)}</strong>, pero las diferencias entre estados son amplias.<br><br>
+La entidad con mayor abandono es <strong>{top_abandono['estado']}</strong> con <strong>{fmt_pct(top_abandono['abandono_total'])}</strong>, mientras que el mayor nivel de vulnerabilidad combinada lo registra <strong>{top_ive['estado']}</strong> con un <strong>IVE de {top_ive['ive']:.1f}</strong>. En paralelo, la menor conectividad se observa en <strong>{min_internet['estado']}</strong> con <strong>{fmt_pct(min_internet['internet'])}</strong> de hogares con internet.
+</div>
+"""))
+```
+
+### Lectura
+
+```{python}
+display(Markdown(f"""
+<div class="narrativa narrativa-secundaria">
+Las correlaciones del conjunto estatal refuerzan la narrativa del tablero: <strong>pobreza y abandono</strong> se mueven en la misma dirección (<strong>r = {corr_pob_ab:.2f}</strong>), mientras que <strong>internet y abandono</strong> tienden a moverse en sentido opuesto (<strong>r = {corr_int_ab:.2f}</strong>). Además, pobreza y conectividad muestran una relación inversa (<strong>r = {corr_pob_int:.2f}</strong>), lo que sugiere una doble desventaja territorial.
+</div>
+"""))
+```
+
+## Row {height="64%"}
+
+### Column {width="58%"}
+
+```{python}
+#| title: "Tendencia histórica del abandono escolar por nivel"
+
+serie_larga = serie.melt(
+    id_vars=["anio"],
+    value_vars=[c for c in ["abandono_ms", "abandono_sec", "abandono_prim"] if c in serie.columns],
+    var_name="nivel",
+    value_name="tasa",
+)
+serie_larga["nivel"] = serie_larga["nivel"].replace({
+    "abandono_ms": "Media superior",
+    "abandono_sec": "Secundaria",
+    "abandono_prim": "Primaria",
+})
+
+color_map = {
+    "Media superior": PAL_PRIMARY,
+    "Secundaria": PAL_SECOND,
+    "Primaria": PAL_ACCENT,
+}
+
+fig_serie = px.line(
+    serie_larga,
+    x="anio",
+    y="tasa",
+    color="nivel",
+    markers=True,
+    color_discrete_map=color_map,
+    hover_data={"anio": True, "tasa": ':.1f', "nivel": True},
+)
+fig_serie.add_vrect(x0=2019.5, x1=2021.5, fillcolor=PAL_ACCENT, opacity=0.10, line_width=0)
+fig_serie.add_annotation(x=2020.5, y=float(serie_larga["tasa"].max()) - 1, text="Choque pandémico", showarrow=False,
+                         font=dict(color=PAL_PRIMARY))
+fig_serie.update_layout(
+    **PLOTLY_LAYOUT,
+    legend=dict(orientation="h", y=1.12, x=0),
+    xaxis_title=None,
+    yaxis_title="Tasa de abandono (%)",
+)
+fig_serie
+```
+
+### Column {width="42%"}
+
+```{python}
+#| title: "Abandono por entidad federativa"
+
+order_states = estados.sort_values("abandono_total", ascending=True)["estado"]
+fig_ab = px.bar(
+    estados.sort_values("abandono_total"),
+    x="abandono_total",
+    y="estado",
+    color="zona_critica",
+    orientation="h",
+    color_discrete_map={True: PAL_PRIMARY, False: PAL_ACCENT},
+    category_orders={"estado": order_states.tolist()},
+    hover_data={
+        "abandono_total": ':.1f',
+        "pobreza": ':.1f',
+        "internet": ':.1f',
+        "zona_critica": True,
+    },
+)
+fig_ab.add_vline(x=abandono_nacional, line_dash="dash", line_color=PAL_TEXT)
+fig_ab.update_layout(
+    **PLOTLY_LAYOUT,
+    legend_title_text="",
+    xaxis_title="Tasa de abandono (%)",
+    yaxis_title=None,
+)
+fig_ab
+```
+
+# Relaciones estructurales
+
+## Column {width="55%"}
+
+```{python}
+#| title: "Pobreza y abandono: la presión estructural"
+
+fig_pob = px.scatter(
+    estados,
+    x="pobreza",
+    y="abandono_total",
+    color="categoria_pob",
+    hover_data={"estado": True, "pobreza": ':.1f', "abandono_total": ':.1f', "internet": ':.1f'},
+    color_discrete_map={
+        "Alta (≥50%)": PAL_PRIMARY,
+        "Media (30-50%)": PAL_SECOND,
+        "Baja (<30%)": PAL_ACCENT,
+    },
+)
+# línea de tendencia manual
+x_pred = np.linspace(estados["pobreza"].min(), estados["pobreza"].max(), 100)
+fit_pob = sm.OLS(estados["abandono_total"], sm.add_constant(estados[["pobreza"]])).fit()
+y_pred = fit_pob.predict(sm.add_constant(pd.DataFrame({"pobreza": x_pred})))
+fig_pob.add_trace(go.Scatter(x=x_pred, y=y_pred, mode="lines", name="Tendencia", line=dict(color=PAL_PRIMARY, dash="dash")))
+fig_pob.update_layout(
+    **PLOTLY_LAYOUT,
+    legend=dict(orientation="h", y=1.12, x=0, title=None),
+    xaxis_title="Pobreza multidimensional (%)",
+    yaxis_title="Abandono en media superior (%)",
+)
+fig_pob.add_annotation(text=f"r = {corr_pob_ab:.2f}", xref="paper", yref="paper", x=0.99, y=0.02, showarrow=False)
+fig_pob
+```
+
+```{python}
+#| title: "Internet y abandono: la dimensión digital"
+
+fig_int = px.scatter(
+    estados,
+    x="internet",
+    y="abandono_total",
+    color="categoria_pob",
+    hover_data={"estado": True, "internet": ':.1f', "abandono_total": ':.1f', "pobreza": ':.1f'},
+    color_discrete_map={
+        "Alta (≥50%)": PAL_PRIMARY,
+        "Media (30-50%)": PAL_SECOND,
+        "Baja (<30%)": PAL_ACCENT,
+    },
+)
+x_pred_i = np.linspace(estados["internet"].min(), estados["internet"].max(), 100)
+fit_int = sm.OLS(estados["abandono_total"], sm.add_constant(estados[["internet"]])).fit()
+y_pred_i = fit_int.predict(sm.add_constant(pd.DataFrame({"internet": x_pred_i})))
+fig_int.add_trace(go.Scatter(x=x_pred_i, y=y_pred_i, mode="lines", name="Tendencia", line=dict(color=PAL_SECOND, dash="dash")))
+fig_int.update_layout(
+    **PLOTLY_LAYOUT,
+    legend=dict(orientation="h", y=1.12, x=0, title=None),
+    xaxis_title="Hogares con internet (%)",
+    yaxis_title="Abandono en media superior (%)",
+)
+fig_int.add_annotation(text=f"r = {corr_int_ab:.2f}", xref="paper", yref="paper", x=0.99, y=0.02, showarrow=False)
+fig_int
+```
+
+## Column {width="45%"}
+
+### Narrativa
+
+```{python}
+display(Markdown(f"""
+<div class="narrativa">
+El patrón no es linealmente exacto, pero sí consistente: los estados con mayores niveles de pobreza tienden a ubicarse en la parte alta del abandono, mientras que los de mayor conectividad concentran mejores resultados relativos. Esto no implica causalidad automática, pero sí muestra una <strong>estructura de riesgo acumulado</strong>.<br><br>
+El modelo alcanza un <strong>R² de {r2_modelo:.2f}</strong>, lo que indica que pobreza, internet y rezago educativo capturan una parte importante de la variación entre entidades. En otras palabras: el abandono no se distribuye al azar, sino que sigue la geografía de la desigualdad.
+</div>
+"""))
+```
+
+```{python}
+#| title: "Modelo predictivo: efecto estimado de cada predictor"
+
+fig_coef = px.scatter(
+    coefs_modelo,
+    x="estimate",
+    y="variable",
+    color="efecto",
+    color_discrete_map={"Aumenta abandono": PAL_PRIMARY, "Reduce abandono": PAL_ACCENT},
+    hover_data={"estimate": ':.3f', "conf_low": ':.3f', "conf_high": ':.3f', "p_value": ':.3f'},
+)
+for _, row in coefs_modelo.iterrows():
+    fig_coef.add_shape(
+        type="line",
+        x0=row["conf_low"], x1=row["conf_high"],
+        y0=row["variable"], y1=row["variable"],
+        xref="x", yref="y",
+        line=dict(color=PAL_TEXT, width=2),
+    )
+fig_coef.add_vline(x=0, line_dash="dash", line_color="#888")
+fig_coef.update_traces(marker=dict(size=12))
+fig_coef.update_layout(
+    **PLOTLY_LAYOUT,
+    legend=dict(orientation="h", y=1.12, x=0, title=None),
+    xaxis_title="Cambio esperado en abandono por 1 punto porcentual",
+    yaxis_title=None,
+)
+fig_coef.add_annotation(text=f"R² = {r2_modelo:.2f}", xref="paper", yref="paper", x=0.99, y=0.02, showarrow=False)
+fig_coef
+```
+
+```{python}
+#| title: "Índice de Vulnerabilidad Educativa (IVE)"
+
+fig_ive = px.bar(
+    estados.sort_values("ive"),
+    x="ive",
+    y="estado",
+    orientation="h",
+    color="abandono_total",
+    color_continuous_scale=[PAL_SOFT, PAL_PRIMARY],
+    hover_data={"ive": ':.1f', "pobreza": ':.1f', "sin_internet": ':.1f', "abandono_total": ':.1f'},
+)
+fig_ive.update_layout(
+    **PLOTLY_LAYOUT,
+    xaxis_title="IVE = promedio(% pobreza, % sin internet)",
+    yaxis_title=None,
+    coloraxis_colorbar_title="Abandono %",
+)
+fig_ive.add_annotation(text=f"Mayor IVE: {top_ive['estado']} ({top_ive['ive']:.1f})", xref="paper", yref="paper", x=0.99, y=0.02, showarrow=False)
+fig_ive
+```
+
+# Brecha de género
+
+## Column {width="55%"}
+
+```{python}
+#| title: "Abandono por sexo y entidad"
+
+estados_ord = estados.sort_values("abandono_total")
+fig_genero = go.Figure()
+for _, row in estados_ord.iterrows():
+    fig_genero.add_trace(go.Scatter(
+        x=[row["abandono_m"], row["abandono_h"]],
+        y=[row["estado"], row["estado"]],
+        mode="lines",
+        line=dict(color="#b9c1c7", width=2),
+        showlegend=False,
+        hoverinfo="skip",
+    ))
+fig_genero.add_trace(go.Scatter(
+    x=estados_ord["abandono_m"], y=estados_ord["estado"], mode="markers", name="Mujeres",
+    marker=dict(color=PAL_ACCENT, size=9),
+    customdata=np.stack([estados_ord["estado"], estados_ord["abandono_m"]], axis=1),
+    hovertemplate="%{customdata[0]}<br>Mujeres: %{customdata[1]:.1f} %<extra></extra>",
+))
+fig_genero.add_trace(go.Scatter(
+    x=estados_ord["abandono_h"], y=estados_ord["estado"], mode="markers", name="Hombres",
+    marker=dict(color=PAL_PRIMARY, size=9),
+    customdata=np.stack([estados_ord["estado"], estados_ord["abandono_h"]], axis=1),
+    hovertemplate="%{customdata[0]}<br>Hombres: %{customdata[1]:.1f} %<extra></extra>",
+))
+fig_genero.add_vline(x=9.1, line_dash="dash", line_color=PAL_ACCENT)
+fig_genero.add_vline(x=13.5, line_dash="dash", line_color=PAL_PRIMARY)
+fig_genero.update_layout(
+    **PLOTLY_LAYOUT,
+    legend=dict(orientation="h", y=1.08, x=0),
+    xaxis_title="Tasa de abandono (%)",
+    yaxis_title=None,
+    height=800,
+)
+fig_genero
+```
+
+## Column {width="45%"}
+
+```{python}
+display(Markdown(f"""
+<div class="narrativa">
+La brecha de género no es un fenómeno marginal. En los datos procesado, el abandono masculino supera al femenino en <strong>{int((estados['brecha_genero'] > 0).sum())} de {len(estados)} entidades</strong>. La brecha promedio entre estados es de <strong>{fmt_pp(brecha_nacional)}</strong>, y el máximo observado aparece en <strong>{max_brecha['estado']}</strong> con <strong>{fmt_pp(max_brecha['brecha_genero'])}</strong>.<br><br>
+Es claro: el rezago escolar no se distribuye igual entre hombres y mujeres. La persistencia de una brecha positiva sugiere que las estrategias de retención no deberían ser neutras al género, especialmente en contextos de alta pobreza y baja conectividad.
+</div>
+"""))
+```
+
+```{python}
+#| title: "Brecha de género por entidad"
+
+brecha_q80 = estados["brecha_genero"].quantile(0.80)
+brecha_plot = estados.sort_values("brecha_genero").copy()
+brecha_plot["destaca"] = brecha_plot["brecha_genero"] >= brecha_q80
+
+fig_brecha = px.bar(
+    brecha_plot,
+    x="brecha_genero",
+    y="estado",
+    color="destaca",
+    orientation="h",
+    color_discrete_map={True: PAL_PRIMARY, False: PAL_ACCENT},
+    hover_data={"brecha_genero": ':.1f'},
+)
+fig_brecha.add_vline(x=brecha_nacional, line_dash="dash", line_color=PAL_TEXT)
+fig_brecha.update_layout(
+    **PLOTLY_LAYOUT,
+    legend_title_text="",
+    xaxis_title="Diferencia Hombres - Mujeres (pp)",
+    yaxis_title=None,
+)
+fig_brecha.add_annotation(text=f"Promedio = {fmt_pp(brecha_nacional)}", xref="paper", yref="paper", x=0.99, y=0.02, showarrow=False)
+fig_brecha
+```
+
+```{python}
+#| title: "Pobreza y brecha de género"
+
+X_b = sm.add_constant(estados[["pobreza", "internet"]])
+mod_brecha = sm.OLS(estados["brecha_genero"], X_b).fit()
+
+fig_brel = px.scatter(
+    estados,
+    x="pobreza",
+    y="brecha_genero",
+    color="internet",
+    color_continuous_scale=[PAL_PRIMARY, PAL_ACCENT],
+    hover_data={"estado": True, "pobreza": ':.1f', "brecha_genero": ':.1f', "internet": ':.1f'},
+)
+# trendline manual on pobreza only for lectura visual
+fit_bg = sm.OLS(estados["brecha_genero"], sm.add_constant(estados[["pobreza"]])).fit()
+xb = np.linspace(estados["pobreza"].min(), estados["pobreza"].max(), 100)
+yb = fit_bg.predict(sm.add_constant(pd.DataFrame({"pobreza": xb})))
+fig_brel.add_trace(go.Scatter(x=xb, y=yb, mode="lines", name="Tendencia", line=dict(color=PAL_PRIMARY, dash="dash")))
+fig_brel.update_layout(
+    **PLOTLY_LAYOUT,
+    xaxis_title="Pobreza multidimensional (%)",
+    yaxis_title="Brecha de género (pp)",
+)
+fig_brel.add_annotation(text=f"R² = {mod_brecha.rsquared:.2f}", xref="paper", yref="paper", x=0.99, y=0.02, showarrow=False)
+fig_brel
+```
+
+# Zonas críticas y priorización
+
+## Row {height="20%"}
+
+### Criterio de clasificación
+
+```{python}
+display(Markdown(f"""
+<div class="narrativa">
+Una entidad se considera <strong>zona crítica</strong> cuando combina simultáneamente alta pobreza, baja conectividad y abandono por encima del centro de la distribución estatal. Con el criterio exportado por el pipeline, se identifican <strong>{total_criticos} estados prioritarios</strong>: <strong>{texto_criticos}</strong>.<br><br>
+Este recorte no busca etiquetar, sino <strong>priorizar intervención</strong>. Son territorios donde la desventaja social y digital se transforma con mayor facilidad en abandono escolar.
+</div>
+"""))
+```
+
+## Row {height="80%"}
+
+### Column {width="58%"}
+
+```{python}
+#| title: "Tabla estatal de indicadores"
+
+tabla = (
+    estados.sort_values(["ive", "abandono_total"], ascending=[False, False])
+    [["estado", "region", "abandono_total", "abandono_h", "abandono_m", "brecha_genero", "pobreza", "internet", "ive", "zona_critica"]]
+    .rename(columns={
+        "estado": "Estado",
+        "region": "Región",
+        "abandono_total": "Abandono MS %",
+        "abandono_h": "Hombres %",
+        "abandono_m": "Mujeres %",
+        "brecha_genero": "Brecha pp",
+        "pobreza": "Pobreza %",
+        "internet": "Internet %",
+        "ive": "IVE",
+        "zona_critica": "Zona crítica",
+    })
+    .copy()
+)
+for c in ["Abandono MS %", "Hombres %", "Mujeres %", "Brecha pp", "Pobreza %", "Internet %", "IVE"]:
+    tabla[c] = tabla[c].round(1)
+tabla["Zona crítica"] = tabla["Zona crítica"].map({True: "Sí", False: "No"})
+
+styled = (
+    tabla.head(32)
+    .style.hide(axis="index")
+    .background_gradient(subset=["IVE"], cmap="Blues")
+    .set_table_styles([
+        {"selector": "th", "props": [("background-color", PAL_PRIMARY), ("color", PAL_WHITE), ("font-weight", "bold")]},
+        {"selector": "td", "props": [("font-size", "0.9rem")]},
+    ])
+)
+display(HTML(styled.to_html()))
+```
+
+### Column {width="42%"}
+
+```{python}
+#| title: "Mapa térmico de correlaciones"
+
+mat_cor = estados[[
+    "abandono_total", "abandono_h", "abandono_m", "pobreza", "pob_ext",
+    "rezago_edu", "internet", "brecha_genero", "ive"
+]].corr().round(2)
+
+rename_corr = {
+    "abandono_total": "Abandono MS",
+    "abandono_h": "Abandono hombres",
+    "abandono_m": "Abandono mujeres",
+    "pobreza": "Pobreza",
+    "pob_ext": "Pobreza extrema",
+    "rezago_edu": "Rezago educativo",
+    "internet": "Internet",
+    "brecha_genero": "Brecha de género",
+    "ive": "IVE",
+}
+mat_cor = mat_cor.rename(index=rename_corr, columns=rename_corr)
+
+fig_cor = px.imshow(
+    mat_cor,
+    text_auto=True,
+    color_continuous_scale=[PAL_PRIMARY, PAL_WHITE, PAL_ACCENT],
+    zmin=-1,
+    zmax=1,
+)
+fig_cor.update_layout(
+    **PLOTLY_LAYOUT,
+    coloraxis_colorbar_title="r",
+    xaxis_title=None,
+    yaxis_title=None,
+)
+fig_cor
+```
+
+```{python}
+#| title: "Top 10 entidades según IVE"
+
+top10 = estados.nlargest(10, "ive")[["estado", "pobreza", "sin_internet", "ive", "abandono_total"]].copy()
+top10.columns = ["Estado", "Pobreza %", "Sin internet %", "IVE", "Abandono MS %"]
+for col in ["Pobreza %", "Sin internet %", "IVE", "Abandono MS %"]:
+    top10[col] = top10[col].round(1)
+
+display(HTML(top10.to_html(index=False, classes="table table-sm table-striped")))
+```
+
+# Metodología
+
+## Column {width="55%"}
+
+### Conexión con el pipeline
+
+Este dashboard ya no depende de datos incrustados dentro del `.qmd`. Lee directamente los archivos generados por el pipeline en:
+
+-   `../datos/processed/datos_estados.csv`
+-   `../datos/processed/serie_temporal.csv`
+
+Si estos archivos no existen, el render se detiene con un mensaje explícito para evitar visualizaciones desalineadas o resultados obsoletos.
+
+### Fuentes de datos
+
+| Dataset                      | Fuente                |       Año | Nivel    |
+|------------------------------|-----------------------|----------:|----------|
+| Abandono escolar por entidad | INEGI / SEP           | 2022-2023 | Estatal  |
+| Pobreza multidimensional     | CONEVAL               |      2022 | Estatal  |
+| Rezago educativo             | CONEVAL               |      2022 | Estatal  |
+| Internet en hogares          | ENDUTIH (INEGI / IFT) |      2023 | Estatal  |
+| Serie temporal de abandono   | INEGI / SEP           | 2000-2023 | Nacional |
+
+### Indicadores derivados
+
+-   **Brecha de género** = abandono hombres − abandono mujeres
+-   **IVE** = promedio entre pobreza y porcentaje de hogares sin internet
+-   **Zona crítica** = convergencia de alta pobreza, baja conectividad y abandono alto
+
+## Column {width="45%"}
+
+### Especificación estadística
+
+$$
+\text{Abandono}_i = \beta_0 + \beta_1 \cdot \text{Pobreza}_i + \beta_2 \cdot \text{Internet}_i + \beta_3 \cdot \text{RezagoEdu}_i + \varepsilon_i
+$$
+
+El modelo del dashboard produce un **R² = 0.00**, reemplazado dinámicamente en el bloque inferior.
+
+```{python}
+display(Markdown(f"El modelo del dashboard produce un **R² = {r2_modelo:.2f}**, suficiente para sostener una lectura explicativa del patrón territorial, sin afirmar causalidad mecánica."))
+```
+
+### Puntos
+
+-   La pobreza opera como un predictor estructural del abandono.
+-   La conectividad funciona como amortiguador o acelerador de la vulnerabilidad educativa.
+-   La brecha de género persiste y exige respuestas focalizadas.
+-   El IVE ayuda a priorizar territorios donde la intervención puede tener mayor impacto.
+
+### Equipo
+
+**Bladerunners — HackODS UNAM 2026**
+
+-   Luis Fernando Martínez Moreno
+-   Guadalupe Herrera Barragán
+-   Ana Lydia Herrera Macías
