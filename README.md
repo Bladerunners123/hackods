@@ -142,26 +142,39 @@ Este notebook no sustituye la interpretación del equipo; su función es:
 ## Estructura del repositorio
 
 ```text
-hackatonods/
+C:\hackatonods\
 │
-├── dashboard_files/
-├── datos/
-│   ├── raw/
-│   └── processed/
-│       ├── datos_estados.csv
-│       ├── serie_temporal.csv
-│       └── coeficientes_modelo.csv
+├── dashboard\
+│   ├── dashboard_files\
+│   │   └── libs\
+│   │       ├── bootstrap\
+│   │       ├── clipboard\
+│   │       ├── quarto-dashboard\
+│   │       └── quarto-html\
+│   ├── rsconnect\
+│   ├── .Rhistory
+│   ├── custom.scss
+│   ├── dashboard.html
+│   └── dashboard.qmd
 │
-├── 01_datos_reales.R
-├── 02_analisis.R
-├── 01_pipeline_bladerunners_python.ipynb
-├── custom.scss
-├── dashboard.html
-├── dashboard.qmd
+├── datos\
+│   ├── processed\
+│   │   ├── brecha_genero_estados.csv
+│   │   ├── coeficientes_modelo.csv
+│   │   ├── correlaciones_abandono.csv
+│   │   ├── datos_estados.csv
+│   │   ├── matriz_correlacion.csv
+│   │   ├── resumen_modelos.csv
+│   │   ├── serie_temporal.csv
+│   │   └── zonas_criticas.csv
+│   └── metadata.md
+│
+├── notebooks\
+│   ├── 01_pipeline_bladerunners_python.ipynb
+│   └── requirements.txt
+│
+├── ai-log_template_bladerunners.md
 ├── declaratoria_IA.md
-├── Fuentes.txt
-├── metadata.md
-├── README.md
+├── index.html
 ├── LICENSE
-├── .RData
-└── .Rhistory
+└── README.md
